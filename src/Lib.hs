@@ -3,17 +3,11 @@ module Lib
     ) where
 
 import Text.ParserCombinators.Parsec hiding (spaces)
+import Data.List (isPrefixOf, stripPrefix)
+import Numeric (readOct, readHex)
 
 parseSymbol :: Parser Char
-parseSymbol = oneOf "!#$%&|*+-/:<=>?@^_~"
-
--- unused
-spacesParser :: Parser ()
-spacesParser = skipMany1 space
-
-spacesPrecedingSymbolParser :: Parser Char
-spacesPrecedingSymbolParser = spacesParser >> parseSymbol
--- unused
+parseSymbol = oneOf "!$%&|*+-/:<=>?@^_~"
 
 data LispVal = Atom String
              | List [LispVal]
@@ -43,20 +37,52 @@ stringParser = do
 atomParser :: Parser LispVal
 atomParser = do
     firstCharacter <- letter <|> parseSymbol
-    everythingElse <- many (letter <|> parseSymbol <|> digit)
-    let atom = firstCharacter:everythingElse
-    return $ case atom of
-        "#t"    -> Bool True
-        "#f"    -> Bool False
-        _       -> Atom atom
+    restOfString <- many (letter <|> parseSymbol <|> digit)
+    let atom = firstCharacter:restOfString
+    return $ Atom atom
+
+octalParser :: Parser LispVal
+octalParser = do
+    try $ string "#o"
+    octalAsString <- many1 octDigit
+    return $ case (readOct octalAsString) of
+        [(number, _)]   -> Number number
+        _               -> Atom octalAsString
+
+hexParser :: Parser LispVal
+hexParser = do
+    try $ string "#x"
+    hexAsString <- many1 hexDigit
+    return $ case (readHex hexAsString) of
+        [(number, _)]   -> Number number
+        _               -> Atom hexAsString
+
+decimalParser :: Parser LispVal
+decimalParser = do
+    numberAsString <- many1 digit
+    return $ Number $ read numberAsString
+
+decimalWithNotationParser :: Parser LispVal
+decimalWithNotationParser = do
+    try $ string "#d"
+    digits <- many1 digit
+    return $ Number $ read digits
 
 numberParser :: Parser LispVal
-numberParser = do
-   numberAsString <- many1 digit
-   return $ Number $ read numberAsString
+numberParser = octalParser <|> hexParser <|> decimalWithNotationParser <|> decimalParser
+
+boolParser :: Parser LispVal
+boolParser = trueParser <|> falseParser
+    where
+        trueParser = do
+            try $ string "#t"
+            return $ Bool True
+        falseParser = do
+            try $ string "#f"
+            return $ Bool False
 
 lispExpressionParser :: Parser LispVal
-lispExpressionParser = atomParser <|> stringParser <|> numberParser
+lispExpressionParser = atomParser <|> boolParser <|> stringParser <|> numberParser
 
 readExpression :: String -> String
 readExpression input = case (parse lispExpressionParser "lisp" input) of

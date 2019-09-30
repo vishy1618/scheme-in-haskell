@@ -42,3 +42,9 @@ spec = do
     describe "number parsing" $ do
         it "parses number" $
             readExpression "23" `shouldBe` "Found number: 23"
+
+        it "parses octal number" $
+            readExpression "#o23" `shouldBe` "Found number: 19"
+
+        it "parses hex number" $
+            readExpression "#x1A" `shouldBe` "Found number: 26"
